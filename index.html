@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <script src="vexflow-min.js"></script>
+    <script src="https://libs.baidu.com/jquery/2.0.0/jquery.min.js"></script>
+    <script src="WebMIDIAPI.min.js"></script>
+    <title>🍅Kaki</title>
+
+    <script>
+        var _hmt = _hmt || [];
+        (function() {
+          var hm = document.createElement("script");
+          hm.src = "https://hm.baidu.com/hm.js?8a3dd3bd8f5994ac02e145125c5004a0";
+          var s = document.getElementsByTagName("script")[0]; 
+          s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+        
+</head>
+
+<body style="background-color:moccasin;">
+    <div id="main" style="text-align: center;">
+        <h2>🍅Kak<span style="color: orangered;">i</span></h2>
+        <!-- <h4 style="z-index: 9999;top: 200;">earture.org/kaki</h4> -->
+        <div id="livepad1"></div>
+        <div id="livepad2"></div>
+
+        <div id="boo"></div>
+        <!-- <button onclick="livePad.push('A/4')">a2</button>
+        <button onclick="renderNotes_new('treble',['A/3','C/4','E/5'])">f4</button> -->
+        
+        <br>
+
+        <div id="container" class="cf">
+            <div id="inputs"></div>
+            <div id="outputs"></div>
+            <div><b>MIDI Data:</b></div>
+            <div id="log"></div>
+            <div><b>Tools:</b></div>
+            <div><a href="http://www.tobias-erichsen.de/wp-content/uploads/2020/01/loopMIDISetup_1_0_16_27.zip">loopMIDI</a></div>
+            <h3>@Earture 2020</h3>
+        </div>
+    </div>
+</body>
+
+</html>
+
+<script>
+    Array.prototype.remove = function (val) {
+        for (var i = 0; i < this.length; i++) {
+            if (this[i] == val) this.splice(i, 1);
+        }
+    };
+
+    notePads = new Array();
+    livePad_sharp = new Array();
+    livePad = new Array();
+    treble_list = new Array();
+    bass_list = new Array();
+
+    A_pad = new Array();
+    B_pad = new Array();
+    C_pad = new Array();
+    D_pad = new Array();
+    E_pad = new Array();
+    F_pad = new Array();
+    G_pad = new Array();
+
+    A_pad = [21, 33, 45, 57, 69, 81, 93, 105];
+    B_pad = [23, 35, 47, 59, 71, 83, 95, 107];
+    C_pad = [0, 24, 36, 48, 60, 72, 84, 96, 108];
+    D_pad = [0, 26, 38, 50, 62, 74, 86, 98, 0];
+    E_pad = [0, 28, 40, 52, 64, 76, 88, 100, 0];
+    F_pad = [0, 29, 41, 53, 65, 77, 89, 101, 0];
+    G_pad = [0, 31, 43, 55, 67, 79, 91, 103, 0];
+
+    VF = Vex.Flow;
+    initNotes();
+
+    function initNotes() {
+        // Create an SVG renderer and attach it to the DIV element named "boo".
+        divNotes = document.getElementById("boo")
+        renderer = new VF.Renderer(divNotes, VF.Renderer.Backends.SVG);
+
+        // Size our SVG:
+        renderer.resize(500, 300);
+
+        // And get a drawing context:
+        context = renderer.getContext();
+
+        // Create a stave at position 10, 40 of width 400 on the canvas.
+        stave = new VF.Stave(60, 50, 380);
+        stave_bass = new VF.Stave(60, 110, 380)
+
+        // Add a clef and time signature.
+        stave.addClef("treble");
+        stave_bass.addClef("bass");
+
+        // Connect it to the rendering context and draw!
+        stave.setContext(context).draw();
+        stave_bass.setContext(context).draw();
+
+    };
+
+
+
+
+    function renderNotes_new(clef_name, note_name_new) {
+
+        $("#boo").empty();
+        initNotes();
+
+        notes = [
+            // A quarter-note C.
+            new VF.StaveNote({ clef: clef_name, keys: note_name_new, duration: "q", align_center: true })
+
+        ];
+
+            VF.Formatter.FormatAndDraw(context, stave, notes);
+        
+    };
+
+
+
+</script>
+
+<script>
+    window.onload = function () {
+        var
+            divLog = document.getElementById('log'),
+            divInputs = document.getElementById('inputs'),
+            divOutputs = document.getElementById('outputs'),
+            midiAccess,
+            checkboxMIDIInOnChange,
+            checkboxMIDIOutOnChange,
+            activeInputs = {},
+            activeOutputs = {};
+
+        if (navigator.requestMIDIAccess !== undefined) {
+            navigator.requestMIDIAccess().then(
+
+                function onFulfilled(access) {
+                    midiAccess = access;
+
+                    // create list of all currently connected MIDI devices
+                    showMIDIPorts();
+
+                    // update the device list when devices get connected, disconnected, opened or closed
+                    midiAccess.onstatechange = function (e) {
+                        var port = e.port;
+                        var div = port.type === 'input' ? divInputs : divOutputs;
+                        var listener = port.type === 'input' ? checkboxMIDIInOnChange : checkboxMIDIOutOnChange;
+                        var activePorts = port.type === 'input' ? activeInputs : activeOutputs;
+                        var checkbox = document.getElementById(port.type + port.id);
+                        var label;
+
+                        // device disconnected
+                        if (port.state === 'disconnected') {
+                            port.close();
+                            label = checkbox.parentNode;
+                            checkbox.nextSibling.nodeValue = port.name + ' (' + port.state + ', ' + port.connection + ')';
+                            checkbox.disabled = true;
+                            checkbox.checked = false;
+                            delete activePorts[port.type + port.id];
+
+                            // new device connected
+                        } else if (checkbox === null) {
+                            label = document.createElement('label');
+                            checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.id = port.type + port.id;
+                            checkbox.addEventListener('change', listener, false);
+                            label.appendChild(checkbox);
+                            label.appendChild(document.createTextNode(port.name + ' (' + port.state + ', ' + port.connection + ')'));
+                            div.appendChild(label);
+                            div.appendChild(document.createElement('br'));
+
+                            // device opened or closed
+                        } else if (checkbox !== null) {
+                            label = checkbox.parentNode;
+                            checkbox.disabled = false;
+                            checkbox.nextSibling.nodeValue = port.name + ' (' + port.state + ', ' + port.connection + ')';
+                        }
+                    };
+                },
+
+                function onRejected(e) {
+                    divInputs.innerHTML = e.message;
+                    divOutputs.innerHTML = '';
+                }
+            );
+        }
+
+        // browsers without WebMIDI API or Jazz plugin
+        else {
+            divInputs.innerHTML = 'No access to MIDI devices: browser does not support WebMIDI API, please use the WebMIDIAPIShim together with the Jazz plugin';
+            divOutputs.innerHTML = '';
+        }
+
+
+        function showMIDIPorts() {
+            var
+                html,
+                checkbox,
+                checkboxes,
+                inputs,
+                outputs,
+                i,
+                maxi;
+
+            inputs = midiAccess.inputs;
+            html = '<h4>❤️select your midi inputs:</h4>';
+            inputs.forEach(function (port) {
+                html += '<label><input type="checkbox" id="' + port.type + port.id + '">' + port.name + ' (' + port.state + ', ' + port.connection + ')</label><br>';
+            });
+            divInputs.innerHTML = html;
+
+            outputs = midiAccess.outputs;
+            html = '<h4>midi outputs:</h4>';
+            outputs.forEach(function (port) {
+                html += '<label><input type="checkbox" id="' + port.type + port.id + '">' + port.name + ' (' + port.state + ', ' + port.connection + ')</label><br>';
+            });
+            divOutputs.innerHTML = html;
+
+            checkboxes = document.querySelectorAll('#inputs input[type="checkbox"]');
+            for (i = 0, maxi = checkboxes.length; i < maxi; i++) {
+                checkbox = checkboxes[i];
+                checkbox.addEventListener('change', checkboxMIDIInOnChange, false);
+            }
+
+            checkboxes = document.querySelectorAll('#outputs input[type="checkbox"]');
+            for (i = 0, maxi = checkboxes.length; i < maxi; i++) {
+                checkbox = checkboxes[i];
+                checkbox.addEventListener('change', checkboxMIDIOutOnChange, false);
+            }
+        }
+
+
+        // handle incoming MIDI messages
+        function inputListener(midimessageEvent) {
+            var port,
+                portId,
+                data = midimessageEvent.data,
+                type = data[0],
+                data1 = data[1],
+                data2 = data[2];
+
+            // do something graphical with the incoming midi data
+            divLog.innerHTML = type + ' ' + data1 + ' ' + data2;
+
+            if (type == 144) {
+                if (A_pad.includes(data1)) {
+                    livePad.push('A/' + A_pad.indexOf(data1));
+                } else if (B_pad.includes(data1)) {
+                    livePad.push('B/' + B_pad.indexOf(data1));
+                } else if (C_pad.includes(data1)) {
+                    livePad.push('C/' + C_pad.indexOf(data1));
+                } else if (D_pad.includes(data1)) {
+                    livePad.push('D/' + D_pad.indexOf(data1));
+                } else if (E_pad.includes(data1)) {
+                    livePad.push('E/' + E_pad.indexOf(data1));
+                } else if (F_pad.includes(data1)) {
+                    livePad.push('F/' + F_pad.indexOf(data1));
+                } else if (G_pad.includes(data1)) {
+                    livePad.push('G/' + G_pad.indexOf(data1));
+                } else if (A_pad.includes(data1 - 1)) {
+                    livePad_sharp.push('A#/' + A_pad.indexOf(data1 - 1));
+                } else if (B_pad.includes(data1 - 1)) {
+                    livePad_sharp.push('B#/' + B_pad.indexOf(data1 - 1));
+                } else if (C_pad.includes(data1 - 1)) {
+                    livePad_sharp.push('C#/' + C_pad.indexOf(data1 - 1));
+                } else if (D_pad.includes(data1 - 1)) {
+                    livePad_sharp.push('D#/' + D_pad.indexOf(data1 - 1));
+                } else if (E_pad.includes(data1 - 1)) {
+                    livePad_sharp.push('E#/' + E_pad.indexOf(data1 - 1));
+                } else if (F_pad.includes(data1 - 1)) {
+                    livePad_sharp.push('F#/' + F_pad.indexOf(data1 - 1));
+                } else if (G_pad.includes(data1 - 1)) {
+                    livePad_sharp.push('G#/' + G_pad.indexOf(data1 - 1));
+                };
+
+            } else if (type == 128) {
+                if (A_pad.includes(data1)) {
+                    livePad.remove('A/' + A_pad.indexOf(data1));
+                } else if (B_pad.includes(data1)) {
+                    livePad.remove('B/' + B_pad.indexOf(data1));
+                } else if (C_pad.includes(data1)) {
+                    livePad.remove('C/' + C_pad.indexOf(data1));
+                } else if (D_pad.includes(data1)) {
+                    livePad.remove('D/' + D_pad.indexOf(data1));
+                } else if (E_pad.includes(data1)) {
+                    livePad.remove('E/' + E_pad.indexOf(data1));
+                } else if (F_pad.includes(data1)) {
+                    livePad.remove('F/' + F_pad.indexOf(data1));
+                } else if (G_pad.includes(data1)) {
+                    livePad.remove('G/' + G_pad.indexOf(data1));
+                } else if (A_pad.includes(data1 - 1)) {
+                    livePad_sharp.remove('A#/' + A_pad.indexOf(data1 - 1));
+                } else if (B_pad.includes(data1 - 1)) {
+                    livePad_sharp.remove('B#/' + B_pad.indexOf(data1 - 1));
+                } else if (C_pad.includes(data1 - 1)) {
+                    livePad_sharp.remove('C#/' + C_pad.indexOf(data1 - 1));
+                } else if (D_pad.includes(data1 - 1)) {
+                    livePad_sharp.remove('D#/' + D_pad.indexOf(data1 - 1));
+                } else if (E_pad.includes(data1 - 1)) {
+                    livePad_sharp.remove('E#/' + E_pad.indexOf(data1 - 1));
+                } else if (F_pad.includes(data1 - 1)) {
+                    livePad_sharp.remove('F#/' + F_pad.indexOf(data1 - 1));
+                } else if (G_pad.includes(data1 - 1)) {
+                    livePad_sharp.remove('G#/' + G_pad.indexOf(data1 - 1));
+                };
+            };
+
+            document.getElementById('livepad1').innerHTML = '<h2>🎼' + livePad.concat(livePad_sharp) + '</h2>';
+
+            renderNotes_new("treble", livePad.concat(livePad_sharp));
+
+            for (portId in activeOutputs) {
+                if (activeOutputs.hasOwnProperty(portId)) {
+                    port = activeOutputs[portId];
+                    port.send(data);
+                }
+            }
+        }
+
+
+        checkboxMIDIInOnChange = function () {
+            // port id is the same a the checkbox id
+            var id = this.id;
+            var port = midiAccess.inputs.get(id.replace('input', ''));
+            if (this.checked === true) {
+                activeInputs[id] = port;
+                // implicitly open port by adding an onmidimessage listener
+                port.onmidimessage = inputListener;
+            } else {
+                delete activeInputs[id];
+                port.close();
+            }
+        };
+
+
+        checkboxMIDIOutOnChange = function () {
+            // port id is the same a the checkbox id
+            var id = this.id;
+            var port = midiAccess.outputs.get(id.replace('output', ''));
+            if (this.checked === true) {
+                activeOutputs[id] = port;
+                port.open();
+            } else {
+                delete activeOutputs[id];
+                port.close();
+            }
+        };
+    };
+</script>
